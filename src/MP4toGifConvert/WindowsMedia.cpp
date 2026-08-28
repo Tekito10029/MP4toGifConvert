@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <vector>
 #include <sstream>
+#include <numeric>
 
 using Microsoft::WRL::ComPtr;
 namespace fs = std::filesystem;
@@ -63,6 +64,43 @@ void SetDelay(IWICBitmapFrameEncode* frame, double fps) {
     metadata->SetMetadataByName(L"/grctlext/Delay", &value);
     value.uiVal=2; metadata->SetMetadataByName(L"/grctlext/Disposal", &value); PropVariantClear(&value);
 }
+
+ComPtr<IWICPalette> BuildGlobalPalette(IMFSourceReader* reader, IWICImagingFactory* factory,
+    UINT32 sourceWidth, UINT32 sourceHeight, const Attempt& attempt) {
+    // A single palette for the whole animation avoids writing a 768-byte local
+    // color table for every frame and gives LZW stable color indices.
+    std::vector<unsigned long long> histogram(32 * 32 * 32);
+    LONGLONG nextFrame=0;
+    const LONGLONG interval=static_cast<LONGLONG>(10000000.0/attempt.fps);
+    for (;;) {
+        DWORD streamIndex=0,flags=0; LONGLONG timestamp=0; ComPtr<IMFSample> sample;
+        Check(reader->ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM,0,&streamIndex,&flags,&timestamp,&sample),"動画の色を解析できませんでした。");
+        if (flags & MF_SOURCE_READERF_ENDOFSTREAM) break;
+        if (!sample || timestamp < nextFrame) continue; nextFrame=timestamp+interval;
+        ComPtr<IMFMediaBuffer> mediaBuffer; Check(sample->ConvertToContiguousBuffer(&mediaBuffer),"動画フレームを変換できませんでした。");
+        BYTE* bytes=nullptr; DWORD length=0; Check(mediaBuffer->Lock(&bytes,nullptr,&length),"動画フレームを読み込めませんでした。");
+        ComPtr<IWICBitmap> bitmap; HRESULT result=factory->CreateBitmapFromMemory(sourceWidth,sourceHeight,GUID_WICPixelFormat32bppBGR,sourceWidth*4,length,bytes,&bitmap); mediaBuffer->Unlock(); Check(result,"動画フレームを画像に変換できませんでした。");
+        ComPtr<IWICBitmapScaler> scaler; Check(factory->CreateBitmapScaler(&scaler),"画像縮小処理を作成できませんでした。");
+        Check(scaler->Initialize(bitmap.Get(),attempt.width,attempt.height,WICBitmapInterpolationModeFant),"画像を縮小できませんでした。");
+        std::vector<BYTE> pixels(static_cast<size_t>(attempt.width)*attempt.height*4);
+        Check(scaler->CopyPixels(nullptr,attempt.width*4,static_cast<UINT>(pixels.size()),pixels.data()),"画像の色を解析できませんでした。");
+        for (size_t offset=0;offset+3<pixels.size();offset+=4) {
+            unsigned index=(pixels[offset]>>3)|((pixels[offset+1]>>3)<<5)|((pixels[offset+2]>>3)<<10);
+            ++histogram[index];
+        }
+    }
+    std::vector<unsigned> indices(histogram.size()); std::iota(indices.begin(),indices.end(),0);
+    const size_t colorCount=static_cast<size_t>(std::clamp(attempt.colors,2,256));
+    std::partial_sort(indices.begin(),indices.begin()+colorCount,indices.end(),[&](unsigned a,unsigned b){return histogram[a]>histogram[b];});
+    std::vector<WICColor> colors; colors.reserve(colorCount);
+    for (size_t i=0;i<colorCount;++i) {
+        unsigned value=indices[i]; BYTE b=static_cast<BYTE>(((value&31)<<3)|4); BYTE g=static_cast<BYTE>((((value>>5)&31)<<3)|4); BYTE r=static_cast<BYTE>((((value>>10)&31)<<3)|4);
+        colors.push_back(0xFF000000u|(static_cast<WICColor>(r)<<16)|(static_cast<WICColor>(g)<<8)|b);
+    }
+    ComPtr<IWICPalette> palette; Check(factory->CreatePalette(&palette),"GIFパレットを作成できませんでした。");
+    Check(palette->InitializeCustom(colors.data(),static_cast<UINT>(colors.size())),"共通GIFパレットを作成できませんでした。");
+    return palette;
+}
 }
 
 VideoInfo WindowsMedia::Probe(const fs::path& input) const {
@@ -74,10 +112,13 @@ void WindowsMedia::CreateGif(const fs::path& input, const fs::path& output, cons
     Runtime runtime; UINT32 sourceWidth=0,sourceHeight=0; double sourceFps=0,duration=0;
     ComPtr<IMFSourceReader> reader=OpenReader(input,sourceWidth,sourceHeight,sourceFps,duration);
     ComPtr<IWICImagingFactory> factory; Check(CoCreateInstance(CLSID_WICImagingFactory,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&factory)),"Windows画像エンコーダーを作成できませんでした。");
+    ComPtr<IWICPalette> palette=BuildGlobalPalette(reader.Get(),factory.Get(),sourceWidth,sourceHeight,attempt);
+    reader=OpenReader(input,sourceWidth,sourceHeight,sourceFps,duration);
     ComPtr<IWICStream> stream; Check(factory->CreateStream(&stream),"GIF出力を作成できませんでした。");
     Check(stream->InitializeFromFilename(output.c_str(),GENERIC_WRITE),"GIFファイルを作成できませんでした。");
     ComPtr<IWICBitmapEncoder> encoder; Check(factory->CreateEncoder(GUID_ContainerFormatGif,nullptr,&encoder),"GIFエンコーダーを作成できませんでした。");
     Check(encoder->Initialize(stream.Get(),WICBitmapEncoderNoCache),"GIFエンコーダーを初期化できませんでした。");
+    Check(encoder->SetPalette(palette.Get()),"GIFの共通パレットを設定できませんでした。");
     LONGLONG nextFrame=0; const LONGLONG interval=static_cast<LONGLONG>(10000000.0/attempt.fps); bool wrote=false;
     for (;;) {
         DWORD streamIndex=0,flags=0; LONGLONG timestamp=0; ComPtr<IMFSample> sample;
@@ -89,13 +130,13 @@ void WindowsMedia::CreateGif(const fs::path& input, const fs::path& output, cons
         ComPtr<IWICBitmap> bitmap; HRESULT bitmapResult=factory->CreateBitmapFromMemory(sourceWidth,sourceHeight,GUID_WICPixelFormat32bppBGR,sourceWidth*4,length,bytes,&bitmap); mediaBuffer->Unlock(); Check(bitmapResult,"動画フレームを画像に変換できませんでした。");
         ComPtr<IWICBitmapScaler> scaler; Check(factory->CreateBitmapScaler(&scaler),"画像縮小処理を作成できませんでした。");
         Check(scaler->Initialize(bitmap.Get(),attempt.width,attempt.height,WICBitmapInterpolationModeFant),"画像を縮小できませんでした。");
-        ComPtr<IWICPalette> palette; Check(factory->CreatePalette(&palette),"GIFパレットを作成できませんでした。");
-        Check(palette->InitializeFromBitmap(scaler.Get(),attempt.colors,FALSE),"GIFの色数を削減できませんでした。");
+        ComPtr<IWICFormatConverter> indexed; Check(factory->CreateFormatConverter(&indexed),"GIF色変換を作成できませんでした。");
+        Check(indexed->Initialize(scaler.Get(),GUID_WICPixelFormat8bppIndexed,WICBitmapDitherTypeNone,palette.Get(),0,WICBitmapPaletteTypeCustom),"GIFの色数を削減できませんでした。");
         ComPtr<IWICBitmapFrameEncode> frame; ComPtr<IPropertyBag2> properties;
         Check(encoder->CreateNewFrame(&frame,&properties),"GIFフレームを作成できませんでした。"); Check(frame->Initialize(properties.Get()),"GIFフレームを初期化できませんでした。");
         Check(frame->SetSize(attempt.width,attempt.height),"GIFサイズを設定できませんでした。"); WICPixelFormatGUID format=GUID_WICPixelFormat8bppIndexed; Check(frame->SetPixelFormat(&format),"GIFピクセル形式を設定できませんでした。");
-        Check(frame->SetPalette(palette.Get()),"GIFパレットを設定できませんでした。"); SetDelay(frame.Get(),attempt.fps);
-        Check(frame->WriteSource(scaler.Get(),nullptr),"GIFフレームを書き込めませんでした。"); Check(frame->Commit(),"GIFフレームを保存できませんでした。"); wrote=true;
+        SetDelay(frame.Get(),attempt.fps);
+        Check(frame->WriteSource(indexed.Get(),nullptr),"GIFフレームを書き込めませんでした。"); Check(frame->Commit(),"GIFフレームを保存できませんでした。"); wrote=true;
     }
     if (!wrote) throw std::runtime_error("動画からフレームを取得できませんでした。");
     Check(encoder->Commit(),"GIFを保存できませんでした。"); Check(stream->Commit(STGC_DEFAULT),"GIFファイルを保存できませんでした。");
