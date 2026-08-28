@@ -13,6 +13,7 @@
 #include <sstream>
 #include <numeric>
 #include <iterator>
+#include <cstring>
 
 using Microsoft::WRL::ComPtr;
 namespace fs = std::filesystem;
@@ -81,6 +82,43 @@ void SetInfiniteLoop(IWICBitmapEncoder* encoder) {
     Check(metadata->SetMetadataByName(L"/appext/data",&value), "GIFの無限ループを設定できませんでした。");
 }
 
+ComPtr<IWICBitmap> CreateBitmapFromSample(IMFSample* sample, IWICImagingFactory* factory,
+    UINT32 width, UINT32 height) {
+    ComPtr<IMFMediaBuffer> mediaBuffer;
+    Check(sample->ConvertToContiguousBuffer(&mediaBuffer), "動画フレームを変換できませんでした。");
+
+    const DWORD rowBytes=width*4;
+    const DWORD requiredBytes=rowBytes*height;
+    std::vector<BYTE> pixels(requiredBytes);
+    ComPtr<IMF2DBuffer> buffer2d;
+    if (SUCCEEDED(mediaBuffer.As(&buffer2d))) {
+        // Media Foundation frames commonly have a padded or negative stride.
+        // scanline0 is the display's first row, so signed pitch also fixes
+        // bottom-up RGB32 buffers while copying into WIC's top-down layout.
+        BYTE* scanline0=nullptr; LONG pitch=0;
+        Check(buffer2d->Lock2D(&scanline0,&pitch), "動画フレームの行間隔を読み取れませんでした。");
+        if (scanline0==nullptr || std::abs(pitch)<static_cast<LONG>(rowBytes)) {
+            buffer2d->Unlock2D();
+            throw std::runtime_error("動画フレームの行間隔が不正です。");
+        }
+        for (UINT32 row=0;row<height;++row)
+            std::memcpy(pixels.data()+static_cast<size_t>(row)*rowBytes,
+                scanline0+static_cast<ptrdiff_t>(row)*pitch,rowBytes);
+        buffer2d->Unlock2D();
+    } else {
+        BYTE* source=nullptr; DWORD length=0;
+        Check(mediaBuffer->Lock(&source,nullptr,&length), "動画フレームを読み込めませんでした。");
+        if (length<requiredBytes) { mediaBuffer->Unlock(); throw std::runtime_error("動画フレームのデータサイズが不足しています。"); }
+        std::memcpy(pixels.data(),source,requiredBytes);
+        mediaBuffer->Unlock();
+    }
+
+    ComPtr<IWICBitmap> bitmap;
+    Check(factory->CreateBitmapFromMemory(width,height,GUID_WICPixelFormat32bppBGR,rowBytes,
+        requiredBytes,pixels.data(),&bitmap), "動画フレームを画像に変換できませんでした。");
+    return bitmap;
+}
+
 ComPtr<IWICPalette> BuildGlobalPalette(IMFSourceReader* reader, IWICImagingFactory* factory,
     UINT32 sourceWidth, UINT32 sourceHeight, const Attempt& attempt) {
     // A single palette for the whole animation avoids writing a 768-byte local
@@ -93,9 +131,7 @@ ComPtr<IWICPalette> BuildGlobalPalette(IMFSourceReader* reader, IWICImagingFacto
         Check(reader->ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM,0,&streamIndex,&flags,&timestamp,&sample),"動画の色を解析できませんでした。");
         if (flags & MF_SOURCE_READERF_ENDOFSTREAM) break;
         if (!sample || timestamp < nextFrame) continue; nextFrame=timestamp+interval;
-        ComPtr<IMFMediaBuffer> mediaBuffer; Check(sample->ConvertToContiguousBuffer(&mediaBuffer),"動画フレームを変換できませんでした。");
-        BYTE* bytes=nullptr; DWORD length=0; Check(mediaBuffer->Lock(&bytes,nullptr,&length),"動画フレームを読み込めませんでした。");
-        ComPtr<IWICBitmap> bitmap; HRESULT result=factory->CreateBitmapFromMemory(sourceWidth,sourceHeight,GUID_WICPixelFormat32bppBGR,sourceWidth*4,length,bytes,&bitmap); mediaBuffer->Unlock(); Check(result,"動画フレームを画像に変換できませんでした。");
+        ComPtr<IWICBitmap> bitmap=CreateBitmapFromSample(sample.Get(),factory,sourceWidth,sourceHeight);
         ComPtr<IWICBitmapScaler> scaler; Check(factory->CreateBitmapScaler(&scaler),"画像縮小処理を作成できませんでした。");
         Check(scaler->Initialize(bitmap.Get(),attempt.width,attempt.height,WICBitmapInterpolationModeFant),"画像を縮小できませんでした。");
         std::vector<BYTE> pixels(static_cast<size_t>(attempt.width)*attempt.height*4);
@@ -142,9 +178,7 @@ void WindowsMedia::CreateGif(const fs::path& input, const fs::path& output, cons
         Check(reader->ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM,0,&streamIndex,&flags,&timestamp,&sample),"動画フレームを読み取れませんでした。");
         if (flags & MF_SOURCE_READERF_ENDOFSTREAM) break;
         if (!sample || timestamp < nextFrame) continue; nextFrame=timestamp+interval;
-        ComPtr<IMFMediaBuffer> mediaBuffer; Check(sample->ConvertToContiguousBuffer(&mediaBuffer),"動画フレームを変換できませんでした。");
-        BYTE* bytes=nullptr; DWORD length=0; Check(mediaBuffer->Lock(&bytes,nullptr,&length),"動画フレームを読み込めませんでした。");
-        ComPtr<IWICBitmap> bitmap; HRESULT bitmapResult=factory->CreateBitmapFromMemory(sourceWidth,sourceHeight,GUID_WICPixelFormat32bppBGR,sourceWidth*4,length,bytes,&bitmap); mediaBuffer->Unlock(); Check(bitmapResult,"動画フレームを画像に変換できませんでした。");
+        ComPtr<IWICBitmap> bitmap=CreateBitmapFromSample(sample.Get(),factory,sourceWidth,sourceHeight);
         ComPtr<IWICBitmapScaler> scaler; Check(factory->CreateBitmapScaler(&scaler),"画像縮小処理を作成できませんでした。");
         Check(scaler->Initialize(bitmap.Get(),attempt.width,attempt.height,WICBitmapInterpolationModeFant),"画像を縮小できませんでした。");
         ComPtr<IWICFormatConverter> indexed; Check(factory->CreateFormatConverter(&indexed),"GIF色変換を作成できませんでした。");

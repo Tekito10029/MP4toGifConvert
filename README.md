@@ -47,3 +47,5 @@ msbuild MP4toGifConvert.sln /p:Configuration=Release /p:Platform=x64
 Windows Media FoundationがデコードできるMP4に対応します。アプリはMedia Foundationの動画色変換とハードウェアデコーダーを有効化するため、一般的なH.264形式をRGBへ変換できます。
 
 それでも「映像形式をWindowsでデコードできませんでした」と表示される場合は、エラー末尾の`HRESULT`を確認してください。HEVC/H.265、AV1など、Windows環境にデコーダーが導入されていない形式では、Microsoft Storeから対応する映像拡張機能をインストールするか、動画をH.264形式で書き出し直す必要があります。FFmpegをアプリに同梱・呼び出すことはありません。
+
+Media Foundationが返すRGBフレームには、行末の余白や負方向の行間隔が含まれる場合があります。本アプリは`IMF2DBuffer`の行間隔を使って各行を正規化してからWICへ渡すため、斜めの線や画像の崩れを防止します。
