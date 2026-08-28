@@ -10,7 +10,7 @@
 
 namespace fs = std::filesystem;
 namespace {
-constexpr int InputEdit=101, OutputEdit=102, SelectInput=103, SelectOutput=104, SelectFfmpeg=105, ConvertButton=106, StatusLabel=107, ToolsLabel=108, Progress=109;
+constexpr int InputEdit=101, OutputEdit=102, SelectInput=103, SelectOutput=104, SelectFfmpeg=105, ConvertButton=106, StatusLabel=107, ToolsLabel=108, Progress=109, DownloadFfmpeg=110;
 constexpr UINT ProgressMessage=WM_APP+1, CompleteMessage=WM_APP+2;
 HWND windowHandle{}, inputEdit{}, outputEdit{}, toolsLabel{}, statusLabel{}, convertButton{}, progressBar{};
 fs::path inputPath, outputPath, toolsDirectory;
@@ -23,6 +23,18 @@ std::wstring FromUtf8(const std::string& text) {
 }
 void SetText(HWND control,const std::wstring& text){SetWindowTextW(control,text.c_str());}
 void RefreshTools(){toolsDirectory=FfmpegRunner::ResolveToolsDirectory(toolsDirectory); SetText(toolsLabel,toolsDirectory.empty()?L"未設定":toolsDirectory.wstring());}
+
+void ShowFfmpegDownloadHelp(){
+    int answer=MessageBoxW(windowHandle,
+        L"FFmpegはこのプロジェクトには同梱されていません。\n\n"
+        L"1. FFmpegのWindows版ZIPをダウンロードして展開\n"
+        L"2. 展開先の bin フォルダーを開く\n"
+        L"3. このアプリの［設定...］で bin\\ffmpeg.exe を選択\n\n"
+        L"同じbinフォルダーにffprobe.exeも必要です。\n"
+        L"公式ダウンロードページを開きますか？",
+        L"FFmpegの入手方法",MB_YESNO|MB_ICONINFORMATION);
+    if(answer==IDYES)ShellExecuteW(windowHandle,L"open",L"https://ffmpeg.org/download.html#build-windows",nullptr,nullptr,SW_SHOW);
+}
 
 bool PickFile(bool save,const wchar_t* filter,fs::path& path,const wchar_t* title) {
     wchar_t buffer[32768]{}; if(!path.empty()) wcsncpy_s(buffer,path.c_str(),_TRUNCATE);
@@ -41,7 +53,7 @@ void ChooseFfmpeg(){
 }
 void BeginConversion(){
     if(inputPath.empty()||outputPath.empty())return;
-    if(FfmpegRunner::ResolveToolsDirectory(toolsDirectory).empty()){MessageBoxW(windowHandle,L"先に［FFmpeg設定...］からffmpeg.exeを選択してください。",L"FFmpegが見つかりません",MB_ICONWARNING);ChooseFfmpeg();return;}
+    if(FfmpegRunner::ResolveToolsDirectory(toolsDirectory).empty()){ShowFfmpegDownloadHelp();return;}
     busy=true;EnableWindow(convertButton,FALSE);SendMessageW(progressBar,PBM_SETMARQUEE,TRUE,30);
     auto input=inputPath, output=outputPath, tools=toolsDirectory; HWND target=windowHandle;
     std::thread([input,output,tools,target]{
@@ -58,7 +70,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd,UINT message,WPARAM wParam,LPARAM lParam){
     case WM_CREATE:
         windowHandle=hwnd; Add(L"STATIC",L"入力 MP4",0,18,22,80,24); inputEdit=Add(L"EDIT",L"",WS_BORDER|ES_AUTOHSCROLL|ES_READONLY,100,18,475,26,InputEdit);Add(L"BUTTON",L"選択...",0,585,18,100,28,SelectInput);
         Add(L"STATIC",L"出力 GIF",0,18,62,80,24);outputEdit=Add(L"EDIT",L"",WS_BORDER|ES_AUTOHSCROLL|ES_READONLY,100,58,475,26,OutputEdit);Add(L"BUTTON",L"変更...",0,585,58,100,28,SelectOutput);
-        Add(L"STATIC",L"FFmpeg",0,18,102,80,24);toolsLabel=Add(L"STATIC",L"未設定",SS_PATHELLIPSIS,100,102,475,24,ToolsLabel);Add(L"BUTTON",L"FFmpeg設定...",0,585,98,100,28,SelectFfmpeg);
+        Add(L"STATIC",L"FFmpeg",0,18,102,80,24);toolsLabel=Add(L"STATIC",L"未設定",SS_PATHELLIPSIS,100,102,395,24,ToolsLabel);Add(L"BUTTON",L"入手方法...",0,505,98,80,28,DownloadFfmpeg);Add(L"BUTTON",L"設定...",0,590,98,95,28,SelectFfmpeg);
         Add(L"STATIC",L"上限: 512 KB　最小画像サイズ: 横125px・縦100px",0,100,140,480,24);
         progressBar=Add(PROGRESS_CLASSW,L"",PBS_MARQUEE,18,172,667,18,Progress);statusLabel=Add(L"STATIC",L"3～10秒のMP4ファイルを選択してください。",0,18,204,550,40,StatusLabel);
         convertButton=Add(L"BUTTON",L"GIFに変換",BS_DEFPUSHBUTTON,565,218,120,32,ConvertButton);EnableWindow(convertButton,FALSE);RefreshTools();return 0;
@@ -66,7 +78,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd,UINT message,WPARAM wParam,LPARAM lParam){
         switch(LOWORD(wParam)){
         case SelectInput: if(PickFile(false,L"MP4動画 (*.mp4)\0*.mp4\0\0",inputPath,L"MP4ファイルを選択")){outputPath=inputPath.parent_path()/(inputPath.stem().wstring()+L".gif");SetText(inputEdit,inputPath.wstring());SetText(outputEdit,outputPath.wstring());EnableWindow(convertButton,TRUE);}break;
         case SelectOutput: if(PickFile(true,L"GIF画像 (*.gif)\0*.gif\0\0",outputPath,L"GIFの保存先"))SetText(outputEdit,outputPath.wstring());break;
-        case SelectFfmpeg: ChooseFfmpeg();break; case ConvertButton: BeginConversion();break;
+        case DownloadFfmpeg: ShowFfmpegDownloadHelp();break; case SelectFfmpeg: ChooseFfmpeg();break; case ConvertButton: BeginConversion();break;
         }return 0;
     case ProgressMessage:{std::unique_ptr<std::wstring> text(reinterpret_cast<std::wstring*>(lParam));SetText(statusLabel,*text);return 0;}
     case CompleteMessage:{std::unique_ptr<ConversionResult> result(reinterpret_cast<ConversionResult*>(lParam));busy=false;EnableWindow(convertButton,TRUE);SendMessageW(progressBar,PBM_SETMARQUEE,FALSE,0);SetText(statusLabel,result->message);

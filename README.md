@@ -19,7 +19,14 @@
 - FFmpegの`ffmpeg.exe`と`ffprobe.exe`
 - ビルドする場合のみVisual Studio 2022の「C++によるデスクトップ開発」
 
-アプリの「FFmpeg設定...」から`ffmpeg.exe`を選択してください。同じフォルダーにある`ffprobe.exe`も検証し、設定を次回起動用に保存します。アプリ本体またはその下の`tools`フォルダー、環境変数`PATH`からの自動検出にも対応しています。
+FFmpeg本体はこのリポジトリやビルド結果には含まれていないため、別途入手する必要があります。
+
+1. [FFmpeg公式ダウンロードページのWindows欄](https://ffmpeg.org/download.html#build-windows)を開き、案内されているWindowsビルドのZIPをダウンロードします。
+2. ZIPを任意の場所へ展開します（例: `C:\ffmpeg`）。
+3. 展開したフォルダー内の`bin`を開き、`ffmpeg.exe`と`ffprobe.exe`があることを確認します（例: `C:\ffmpeg\bin\ffmpeg.exe`）。
+4. アプリのFFmpeg欄にある「設定...」を押し、その`ffmpeg.exe`を選択します。「入手方法...」から公式ダウンロードページを開くこともできます。
+
+選択した場所は次回起動用に保存されます。アプリ本体またはその下の`tools`フォルダー、環境変数`PATH`からの自動検出にも対応しています。
 
 > `ffmpeg.exe`だけでは動作しません。必ず`ffprobe.exe`も同じフォルダーに配置してください。
 
@@ -35,9 +42,13 @@ msbuild MP4toGifConvert.sln /p:Configuration=Release /p:Platform=x64
 
 ## 使い方
 
-1. 必要なら「FFmpeg設定...」から`ffmpeg.exe`を選択します。
+1. 必要ならFFmpeg欄の「設定...」から`ffmpeg.exe`を選択します。
 2. 「選択...」からMP4ファイルを選びます。
 3. 必要なら「変更...」でGIFの保存先を変更します。
 4. 「GIFに変換」を押します。
 
 変換処理はバックグラウンドで行われ、進捗を画面に表示します。成功した場合だけ保存先を上書きし、エクスプローラーで出力ファイルを表示します。
+
+## 「FFmpegが見つかりません」と表示される場合
+
+Visual Studioでこのプロジェクトをビルドしても、FFmpeg本体は自動ではインストールされません。「入手方法...」の案内に従ってダウンロードし、「設定...」から展開した`bin\ffmpeg.exe`を選択してください。`ffprobe.exe`が別のフォルダーにある場合は認識されないため、2つのexeが同じ`bin`フォルダーにある状態で選択します。
