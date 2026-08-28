@@ -1,49 +1,43 @@
-# MP4 to GIF Converter
+# MP4 to GIF Converter（C++版）
 
-3～10秒のMP4動画を、**512 KB以下**のGIFへ変換するWindowsデスクトップアプリです。
+3～10秒のMP4動画を**512 KB以下**のGIFへ変換する、ネイティブWindowsデスクトップアプリです。C++17とWin32 APIで実装しており、.NETランタイムは不要です。
 
 ## 変換手順
 
-アプリは次の順序を必ず守り、各試行後に実際のファイルサイズを確認します。
+各試行後に実際のファイルサイズを確認し、次の順序で処理します。
 
-1. 縦横比を維持したまま段階的に縮小します（横125px・縦100pxのどちらも下回りません）。
-2. 最小画像サイズでも512 KBを超える場合、色数を256色から200色へ減らします。
-3. それでも超える場合、フレームレート（フレーム数）を半分にします。
-4. まだ512 KBを超える場合、動画を短くするよう案内し、GIFを出力せず終了します。
+1. 縦横比を維持して段階的に縮小（横125px・縦100pxのどちらも下回りません）
+2. 最小画像サイズでも512 KBを超えた場合、色数を256色から200色へ削減
+3. まだ超える場合、フレームレートを半分に削減
+4. それでも超える場合はGIFを出力せず、動画を短くするよう案内
 
 入力動画は3～10秒かつ125×100px以上である必要があります。
 
 ## 必要環境
 
-- Windows 10/11
-- [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
-- FFmpegの `ffmpeg.exe` と `ffprobe.exe`
+- Windows 10/11（64ビット）
+- FFmpegの`ffmpeg.exe`と`ffprobe.exe`
+- ビルドする場合のみVisual Studio 2022の「C++によるデスクトップ開発」
 
-FFmpegの配布パッケージを展開し、`bin` 内にある `ffmpeg.exe` と `ffprobe.exe` を用意してください。次のいずれかの方法で認識できます。
+アプリの「FFmpeg設定...」から`ffmpeg.exe`を選択してください。同じフォルダーにある`ffprobe.exe`も検証し、設定を次回起動用に保存します。アプリ本体またはその下の`tools`フォルダー、環境変数`PATH`からの自動検出にも対応しています。
 
-1. アプリの「FFmpeg設定...」を押し、`ffmpeg.exe` を選択する（推奨）。同じフォルダーの `ffprobe.exe` も自動確認され、設定は次回起動時にも保持されます。
-2. アプリのexeと同じフォルダー、またはその下の `tools` フォルダーに2ファイルを配置する。
-3. 2ファイルが存在するフォルダーを環境変数 `PATH` に追加する。
-
-「見つかりません」と表示された場合、`ffmpeg.exe` **だけ**では動作しません。必ず同じフォルダーに `ffprobe.exe` も配置してから「FFmpeg設定...」で選び直してください。
+> `ffmpeg.exe`だけでは動作しません。必ず`ffprobe.exe`も同じフォルダーに配置してください。
 
 ## ビルド
 
-Visual Studio 2022で `MP4toGifConvert.sln` を開くか、次のコマンドを実行します。
+Visual Studio 2022で`MP4toGifConvert.sln`を開き、構成を`Release | x64`にしてビルドします。または「Developer Command Prompt for VS 2022」で実行します。
 
-```powershell
-dotnet build MP4toGifConvert.sln -c Release
-dotnet publish src/MP4toGifConvert/MP4toGifConvert.csproj -c Release -r win-x64 --self-contained false
+```bat
+msbuild MP4toGifConvert.sln /p:Configuration=Release /p:Platform=x64
 ```
 
-発行先に `ffmpeg.exe` と `ffprobe.exe` をコピーすれば配布できます。
-
-ビルド時に自動で同梱したい場合は、プロジェクト内の `src/MP4toGifConvert/tools` に2ファイルを置いてからビルドしてください。出力先の `tools` フォルダーへ自動コピーされます（実行ファイル自体はリポジトリに含めていません）。
+出力は`src\MP4toGifConvert\x64\Release`です。`src\MP4toGifConvert\tools`に`ffmpeg.exe`と`ffprobe.exe`を配置してからビルドすると、出力の`tools`フォルダーへ自動コピーされます。FFmpeg本体はリポジトリには含まれません。
 
 ## 使い方
 
-1. 「選択...」からMP4ファイルを選びます。
-2. 必要なら「変更...」でGIFの保存先を変更します。
-3. 「GIFに変換」を押します。
+1. 必要なら「FFmpeg設定...」から`ffmpeg.exe`を選択します。
+2. 「選択...」からMP4ファイルを選びます。
+3. 必要なら「変更...」でGIFの保存先を変更します。
+4. 「GIFに変換」を押します。
 
-変換に成功すると、出力サイズを表示してエクスプローラーで保存場所を開きます。既存の出力ファイルは、変換に成功した場合だけ上書きされます。
+変換処理はバックグラウンドで行われ、進捗を画面に表示します。成功した場合だけ保存先を上書きし、エクスプローラーで出力ファイルを表示します。

@@ -1,6 +1,9 @@
-bin/
-obj/
 .vs/
 *.user
 *.suo
+*.VC.db
+*.VC.opendb
+x64/
+Debug/
+Release/
 src/MP4toGifConvert/tools/*.exe
