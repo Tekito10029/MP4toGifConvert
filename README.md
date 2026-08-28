@@ -19,7 +19,13 @@
 - [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0)
 - FFmpegの `ffmpeg.exe` と `ffprobe.exe`
 
-FFmpegの2ファイルをアプリのexeと同じフォルダーに配置してください。配置されていない場合は、環境変数 `PATH` 上のFFmpegを使用します。
+FFmpegの配布パッケージを展開し、`bin` 内にある `ffmpeg.exe` と `ffprobe.exe` を用意してください。次のいずれかの方法で認識できます。
+
+1. アプリの「FFmpeg設定...」を押し、`ffmpeg.exe` を選択する（推奨）。同じフォルダーの `ffprobe.exe` も自動確認され、設定は次回起動時にも保持されます。
+2. アプリのexeと同じフォルダー、またはその下の `tools` フォルダーに2ファイルを配置する。
+3. 2ファイルが存在するフォルダーを環境変数 `PATH` に追加する。
+
+「見つかりません」と表示された場合、`ffmpeg.exe` **だけ**では動作しません。必ず同じフォルダーに `ffprobe.exe` も配置してから「FFmpeg設定...」で選び直してください。
 
 ## ビルド
 
@@ -31,6 +37,8 @@ dotnet publish src/MP4toGifConvert/MP4toGifConvert.csproj -c Release -r win-x64 
 ```
 
 発行先に `ffmpeg.exe` と `ffprobe.exe` をコピーすれば配布できます。
+
+ビルド時に自動で同梱したい場合は、プロジェクト内の `src/MP4toGifConvert/tools` に2ファイルを置いてからビルドしてください。出力先の `tools` フォルダーへ自動コピーされます（実行ファイル自体はリポジトリに含めていません）。
 
 ## 使い方
 

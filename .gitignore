@@ -3,3 +3,4 @@ obj/
 .vs/
 *.user
 *.suo
+src/MP4toGifConvert/tools/*.exe

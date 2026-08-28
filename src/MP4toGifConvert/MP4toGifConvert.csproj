@@ -9,4 +9,8 @@
     <AssemblyName>MP4toGifConvert</AssemblyName>
     <RootNamespace>MP4toGifConvert</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <Content Include="tools\ffmpeg.exe" Condition="Exists('tools\ffmpeg.exe')" CopyToOutputDirectory="PreserveNewest" TargetPath="tools\ffmpeg.exe" />
+    <Content Include="tools\ffprobe.exe" Condition="Exists('tools\ffprobe.exe')" CopyToOutputDirectory="PreserveNewest" TargetPath="tools\ffprobe.exe" />
+  </ItemGroup>
 </Project>

@@ -9,11 +9,14 @@ internal sealed class FfmpegRunner
     private readonly string _ffmpeg;
     private readonly string _ffprobe;
 
-    public FfmpegRunner()
+    public FfmpegRunner(string? toolsDirectory = null)
     {
-        string baseDirectory = AppContext.BaseDirectory;
-        _ffmpeg = FindTool(baseDirectory, "ffmpeg.exe");
-        _ffprobe = FindTool(baseDirectory, "ffprobe.exe");
+        string? directory = ResolveToolsDirectory(toolsDirectory);
+        if (directory is null)
+            throw new FfmpegNotFoundException();
+
+        _ffmpeg = Path.Combine(directory, "ffmpeg.exe");
+        _ffprobe = Path.Combine(directory, "ffprobe.exe");
     }
 
     public async Task<VideoInfo> ProbeAsync(string inputPath, CancellationToken cancellationToken)
@@ -53,10 +56,35 @@ internal sealed class FfmpegRunner
         }
     }
 
-    private static string FindTool(string directory, string fileName)
+    public static string? ResolveToolsDirectory(string? configuredDirectory = null)
     {
-        string local = Path.Combine(directory, fileName);
-        return File.Exists(local) ? local : fileName;
+        IEnumerable<string?> candidates =
+        [
+            configuredDirectory,
+            AppSettings.LoadToolsDirectory(),
+            Path.Combine(AppContext.BaseDirectory, "tools"),
+            AppContext.BaseDirectory,
+            .. GetPathDirectories()
+        ];
+
+        return candidates
+            .Where(directory => !string.IsNullOrWhiteSpace(directory))
+            .Select(TryGetFullPath)
+            .FirstOrDefault(directory => directory is not null && HasRequiredTools(directory));
+    }
+
+    public static bool HasRequiredTools(string directory) =>
+        File.Exists(Path.Combine(directory, "ffmpeg.exe")) &&
+        File.Exists(Path.Combine(directory, "ffprobe.exe"));
+
+    private static IEnumerable<string> GetPathDirectories() =>
+        (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    private static string? TryGetFullPath(string? directory)
+    {
+        try { return Path.GetFullPath(directory!); }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException) { return null; }
     }
 
     private static double ParseRate(string rate)
@@ -86,7 +114,7 @@ internal sealed class FfmpegRunner
         }
         catch (System.ComponentModel.Win32Exception)
         {
-            throw new ConversionException("ffmpeg.exe または ffprobe.exe が見つかりません。アプリと同じフォルダーに配置してください。");
+            throw new FfmpegNotFoundException();
         }
     }
 }
