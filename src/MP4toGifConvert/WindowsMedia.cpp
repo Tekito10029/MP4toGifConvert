@@ -178,7 +178,7 @@ void WindowsMedia::CreateGif(const fs::path& input, const fs::path& output, cons
         Check(reader->ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM,0,&streamIndex,&flags,&timestamp,&sample),"動画フレームを読み取れませんでした。");
         if (flags & MF_SOURCE_READERF_ENDOFSTREAM) break;
         if (!sample || timestamp < nextFrame) continue; nextFrame=timestamp+interval;
-        ComPtr<IWICBitmap> bitmap=CreateBitmapFromSample(sample.Get(),factory,sourceWidth,sourceHeight);
+        ComPtr<IWICBitmap> bitmap=CreateBitmapFromSample(sample.Get(),factory.Get(),sourceWidth,sourceHeight);
         ComPtr<IWICBitmapScaler> scaler; Check(factory->CreateBitmapScaler(&scaler),"画像縮小処理を作成できませんでした。");
         Check(scaler->Initialize(bitmap.Get(),attempt.width,attempt.height,WICBitmapInterpolationModeFant),"画像を縮小できませんでした。");
         ComPtr<IWICFormatConverter> indexed; Check(factory->CreateFormatConverter(&indexed),"GIF色変換を作成できませんでした。");
