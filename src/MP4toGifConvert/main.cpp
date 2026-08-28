@@ -46,7 +46,7 @@ void BeginConversion(){
     auto input=inputPath, output=outputPath, tools=toolsDirectory; HWND target=windowHandle;
     std::thread([input,output,tools,target]{
         auto result=std::make_unique<ConversionResult>();
-        try{GifConverter converter(FfmpegRunner(tools));*result=converter.Convert(input,output,[target](const std::wstring& message){PostMessageW(target,ProgressMessage,0,reinterpret_cast<LPARAM>(new std::wstring(message)));});}
+        try{GifConverter converter{FfmpegRunner{tools}};*result=converter.Convert(input,output,[target](const std::wstring& message){PostMessageW(target,ProgressMessage,0,reinterpret_cast<LPARAM>(new std::wstring(message)));});}
         catch(const std::exception& e){result->message=FromUtf8(e.what());}
         PostMessageW(target,CompleteMessage,0,reinterpret_cast<LPARAM>(result.release()));
     }).detach();

@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <shlobj.h>
 #include <algorithm>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
@@ -59,9 +60,12 @@ bool FfmpegRunner::HasTools(const fs::path& directory) {
 
 fs::path FfmpegRunner::ResolveToolsDirectory(const fs::path& configured) {
     std::vector<fs::path> candidates{configured, LoadToolsDirectory(), ExecutableDirectory() / L"tools", ExecutableDirectory()};
-    if (const wchar_t* path = _wgetenv(L"PATH")) {
+    wchar_t* path = nullptr;
+    size_t pathLength = 0;
+    if (_wdupenv_s(&path, &pathLength, L"PATH") == 0 && path != nullptr) {
         std::wstringstream stream(path); std::wstring item;
         while (std::getline(stream, item, L';')) if (!item.empty()) candidates.emplace_back(item);
+        free(path);
     }
     for (const auto& candidate : candidates) if (HasTools(candidate)) return fs::absolute(candidate);
     return {};
