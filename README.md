@@ -40,6 +40,8 @@ msbuild MP4toGifConvert.sln /p:Configuration=Release /p:Platform=x64
 
 変換処理はバックグラウンドで行われ、進捗を画面に表示します。成功した場合だけ保存先を上書きし、エクスプローラーで出力ファイルを表示します。
 
+出力GIFにはNetscape Application Extensionの無限ループ設定を付与するため、対応するブラウザーや画像ビューアーでは繰り返し再生されます。
+
 ## 対応動画について
 
 Windows Media FoundationがデコードできるMP4に対応します。アプリはMedia Foundationの動画色変換とハードウェアデコーダーを有効化するため、一般的なH.264形式をRGBへ変換できます。

@@ -12,6 +12,7 @@
 #include <vector>
 #include <sstream>
 #include <numeric>
+#include <iterator>
 
 using Microsoft::WRL::ComPtr;
 namespace fs = std::filesystem;
@@ -63,6 +64,21 @@ void SetDelay(IWICBitmapFrameEncode* frame, double fps) {
     PROPVARIANT value; PropVariantInit(&value); value.vt=VT_UI2; value.uiVal=static_cast<USHORT>(std::max(1.0, std::round(100.0/fps)));
     metadata->SetMetadataByName(L"/grctlext/Delay", &value);
     value.uiVal=2; metadata->SetMetadataByName(L"/grctlext/Disposal", &value); PropVariantClear(&value);
+}
+
+void SetInfiniteLoop(IWICBitmapEncoder* encoder) {
+    ComPtr<IWICMetadataQueryWriter> metadata;
+    Check(encoder->GetMetadataQueryWriter(&metadata), "GIFのループ設定を作成できませんでした。");
+
+    // Netscape Application Extension. A loop count of zero means forever.
+    char application[]="NETSCAPE2.0";
+    PROPVARIANT value; PropVariantInit(&value);
+    value.vt=VT_VECTOR|VT_UI1; value.caub.cElems=static_cast<ULONG>(std::size(application)-1); value.caub.pElems=reinterpret_cast<BYTE*>(application);
+    Check(metadata->SetMetadataByName(L"/appext/application",&value), "GIFのループ識別子を設定できませんでした。");
+
+    BYTE loopData[]={3,1,0,0,0};
+    value.caub.cElems=static_cast<ULONG>(std::size(loopData)); value.caub.pElems=loopData;
+    Check(metadata->SetMetadataByName(L"/appext/data",&value), "GIFの無限ループを設定できませんでした。");
 }
 
 ComPtr<IWICPalette> BuildGlobalPalette(IMFSourceReader* reader, IWICImagingFactory* factory,
@@ -118,6 +134,7 @@ void WindowsMedia::CreateGif(const fs::path& input, const fs::path& output, cons
     Check(stream->InitializeFromFilename(output.c_str(),GENERIC_WRITE),"GIFファイルを作成できませんでした。");
     ComPtr<IWICBitmapEncoder> encoder; Check(factory->CreateEncoder(GUID_ContainerFormatGif,nullptr,&encoder),"GIFエンコーダーを作成できませんでした。");
     Check(encoder->Initialize(stream.Get(),WICBitmapEncoderNoCache),"GIFエンコーダーを初期化できませんでした。");
+    SetInfiniteLoop(encoder.Get());
     Check(encoder->SetPalette(palette.Get()),"GIFの共通パレットを設定できませんでした。");
     LONGLONG nextFrame=0; const LONGLONG interval=static_cast<LONGLONG>(10000000.0/attempt.fps); bool wrote=false;
     for (;;) {
