@@ -11,11 +11,9 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ItemDefinitionGroup>
     <ClCompile><WarningLevel>Level4</WarningLevel><SDLCheck>true</SDLCheck><ConformanceMode>true</ConformanceMode><LanguageStandard>stdcpp17</LanguageStandard><AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions><PreprocessorDefinitions>UNICODE;_UNICODE;NOMINMAX;%(PreprocessorDefinitions)</PreprocessorDefinitions></ClCompile>
-    <Link><SubSystem>Windows</SubSystem><AdditionalDependencies>Comctl32.lib;Comdlg32.lib;Shell32.lib;%(AdditionalDependencies)</AdditionalDependencies></Link>
-    <PostBuildEvent><Command>if exist "$(ProjectDir)tools\ffmpeg.exe" (if not exist "$(OutDir)tools" mkdir "$(OutDir)tools" &amp; copy /Y "$(ProjectDir)tools\ffmpeg.exe" "$(OutDir)tools\")
-if exist "$(ProjectDir)tools\ffprobe.exe" (if not exist "$(OutDir)tools" mkdir "$(OutDir)tools" &amp; copy /Y "$(ProjectDir)tools\ffprobe.exe" "$(OutDir)tools\")</Command></PostBuildEvent>
+    <Link><SubSystem>Windows</SubSystem><AdditionalDependencies>Comctl32.lib;Comdlg32.lib;Shell32.lib;Ole32.lib;Propsys.lib;Windowscodecs.lib;Mfplat.lib;Mfreadwrite.lib;Mfuuid.lib;%(AdditionalDependencies)</AdditionalDependencies></Link>
   </ItemDefinitionGroup>
-  <ItemGroup><ClCompile Include="main.cpp" /><ClCompile Include="FfmpegRunner.cpp" /><ClCompile Include="GifConverter.cpp" /></ItemGroup>
-  <ItemGroup><ClInclude Include="FfmpegRunner.h" /><ClInclude Include="GifConverter.h" /></ItemGroup>
+  <ItemGroup><ClCompile Include="main.cpp" /><ClCompile Include="WindowsMedia.cpp" /><ClCompile Include="GifConverter.cpp" /></ItemGroup>
+  <ItemGroup><ClInclude Include="WindowsMedia.h" /><ClInclude Include="GifConverter.h" /></ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>
