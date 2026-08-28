@@ -28,7 +28,7 @@ std::vector<Attempt> GifConverter::BuildAttempts(const VideoInfo& video) {
 ConversionResult GifConverter::Convert(const fs::path& input, const fs::path& output,
     const std::function<void(const std::wstring&)>& progress) const {
     VideoInfo video = media_.Probe(input);
-    if (video.duration < 3 || video.duration > 10) throw std::runtime_error("動画の長さは3～10秒にしてください。");
+    if (video.duration > 10) throw std::runtime_error("動画の長さは10秒以下にしてください。");
     if (video.width < 125 || video.height < 100) throw std::runtime_error("動画は125×100px以上にしてください。");
     fs::path temporary = fs::temp_directory_path() / (L"MP4toGifConvert-" + std::to_wstring(GetTickCount64()));
     fs::create_directories(temporary);
