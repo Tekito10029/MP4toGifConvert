@@ -40,4 +40,6 @@ msbuild MP4toGifConvert.sln /p:Configuration=Release /p:Platform=x64
 
 ## 対応動画について
 
-Windows Media FoundationがデコードできるMP4に対応します。一般的なH.264/AAC形式はWindows 10/11で利用できますが、追加コーデックが必要な特殊な映像形式では、Windowsがその形式をデコードできない旨のエラーを表示します。
+Windows Media FoundationがデコードできるMP4に対応します。アプリはMedia Foundationの動画色変換とハードウェアデコーダーを有効化するため、一般的なH.264形式をRGBへ変換できます。
+
+それでも「映像形式をWindowsでデコードできませんでした」と表示される場合は、エラー末尾の`HRESULT`を確認してください。HEVC/H.265、AV1など、Windows環境にデコーダーが導入されていない形式では、Microsoft Storeから対応する映像拡張機能をインストールするか、動画をH.264形式で書き出し直す必要があります。FFmpegをアプリに同梱・呼び出すことはありません。

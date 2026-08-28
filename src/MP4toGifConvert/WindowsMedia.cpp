@@ -10,19 +10,37 @@
 #include <cmath>
 #include <stdexcept>
 #include <vector>
+#include <sstream>
 
 using Microsoft::WRL::ComPtr;
 namespace fs = std::filesystem;
 
 namespace {
-void Check(HRESULT result, const char* message) { if (FAILED(result)) throw std::runtime_error(message); }
+void Check(HRESULT result, const char* message) {
+    if (SUCCEEDED(result)) return;
+    std::ostringstream details;
+    details << message << " (HRESULT: 0x" << std::hex << std::uppercase << static_cast<unsigned long>(result) << ")";
+    throw std::runtime_error(details.str());
+}
 struct Runtime {
-    Runtime() { Check(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Windows画像処理を初期化できませんでした。"); Check(MFStartup(MF_VERSION), "Media Foundationを初期化できませんでした。"); }
-    ~Runtime() { MFShutdown(); CoUninitialize(); }
+    bool comStarted=false, mediaFoundationStarted=false;
+    Runtime() {
+        Check(CoInitializeEx(nullptr, COINIT_MULTITHREADED), "Windows画像処理を初期化できませんでした。"); comStarted=true;
+        HRESULT result=MFStartup(MF_VERSION);
+        if (FAILED(result)) { CoUninitialize(); comStarted=false; Check(result, "Media Foundationを初期化できませんでした。"); }
+        mediaFoundationStarted=true;
+    }
+    ~Runtime() { if (mediaFoundationStarted) MFShutdown(); if (comStarted) CoUninitialize(); }
 };
 ComPtr<IMFSourceReader> OpenReader(const fs::path& input, UINT32& width, UINT32& height, double& fps, double& duration) {
+    ComPtr<IMFAttributes> attributes;
+    Check(MFCreateAttributes(&attributes, 3), "動画デコーダー設定を作成できませんでした。");
+    Check(attributes->SetUINT32(MF_SOURCE_READER_ENABLE_VIDEO_PROCESSING, TRUE), "動画の色変換を有効にできませんでした。");
+    Check(attributes->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE), "動画のハードウェアデコードを有効にできませんでした。");
     ComPtr<IMFSourceReader> reader;
-    Check(MFCreateSourceReaderFromURL(input.c_str(), nullptr, &reader), "MP4ファイルを開けませんでした。");
+    Check(MFCreateSourceReaderFromURL(input.c_str(), attributes.Get(), &reader), "MP4ファイルを開けませんでした。");
+    reader->SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS, FALSE);
+    Check(reader->SetStreamSelection(MF_SOURCE_READER_FIRST_VIDEO_STREAM, TRUE), "MP4に映像ストリームがありません。");
     ComPtr<IMFMediaType> type;
     Check(MFCreateMediaType(&type), "動画形式を作成できませんでした。");
     Check(type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video), "動画形式を設定できませんでした。");
