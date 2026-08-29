@@ -14,6 +14,7 @@
 #include <numeric>
 #include <iterator>
 #include <cstring>
+#include <utility>
 
 using Microsoft::WRL::ComPtr;
 namespace fs = std::filesystem;
@@ -59,12 +60,31 @@ ComPtr<IMFSourceReader> OpenReader(const fs::path& input, UINT32& width, UINT32&
     duration=static_cast<double>(value.uhVal.QuadPart)/10000000.0; PropVariantClear(&value);
     return reader;
 }
-void SetDelay(IWICBitmapFrameEncode* frame, double fps) {
+void SetFrameMetadata(IWICBitmapFrameEncode* frame, double fps, const WICRect& rectangle) {
     ComPtr<IWICMetadataQueryWriter> metadata;
-    if (FAILED(frame->GetMetadataQueryWriter(&metadata))) return;
+    Check(frame->GetMetadataQueryWriter(&metadata), "GIFフレーム情報を設定できませんでした。");
     PROPVARIANT value; PropVariantInit(&value); value.vt=VT_UI2; value.uiVal=static_cast<USHORT>(std::max(1.0, std::round(100.0/fps)));
-    metadata->SetMetadataByName(L"/grctlext/Delay", &value);
-    value.uiVal=2; metadata->SetMetadataByName(L"/grctlext/Disposal", &value); PropVariantClear(&value);
+    Check(metadata->SetMetadataByName(L"/grctlext/Delay", &value), "GIFフレーム間隔を設定できませんでした。");
+    // Keep the previous frame so subsequent frames may contain only a changed rectangle.
+    value.uiVal=1; Check(metadata->SetMetadataByName(L"/grctlext/Disposal", &value), "GIFフレームの合成方法を設定できませんでした。");
+    value.uiVal=static_cast<USHORT>(rectangle.X); Check(metadata->SetMetadataByName(L"/imgdesc/Left", &value), "GIFフレーム位置を設定できませんでした。");
+    value.uiVal=static_cast<USHORT>(rectangle.Y); Check(metadata->SetMetadataByName(L"/imgdesc/Top", &value), "GIFフレーム位置を設定できませんでした。");
+    value.uiVal=static_cast<USHORT>(rectangle.Width); Check(metadata->SetMetadataByName(L"/imgdesc/Width", &value), "GIFフレーム幅を設定できませんでした。");
+    value.uiVal=static_cast<USHORT>(rectangle.Height); Check(metadata->SetMetadataByName(L"/imgdesc/Height", &value), "GIFフレーム高さを設定できませんでした。");
+    PropVariantClear(&value);
+}
+
+WICRect FindChangedRectangle(const std::vector<BYTE>& current, const std::vector<BYTE>& previous,
+    UINT32 width, UINT32 height) {
+    if (previous.size()!=current.size()) return {0,0,static_cast<INT>(width),static_cast<INT>(height)};
+    UINT32 left=width,top=height,right=0,bottom=0; bool changed=false;
+    for (UINT32 y=0;y<height;++y) for (UINT32 x=0;x<width;++x) {
+        if (current[static_cast<size_t>(y)*width+x]==previous[static_cast<size_t>(y)*width+x]) continue;
+        changed=true; left=std::min(left,x); top=std::min(top,y); right=std::max(right,x); bottom=std::max(bottom,y);
+    }
+    // Preserve timing for a duplicate frame with a harmless single-pixel rectangle.
+    if (!changed) return {0,0,1,1};
+    return {static_cast<INT>(left),static_cast<INT>(top),static_cast<INT>(right-left+1),static_cast<INT>(bottom-top+1)};
 }
 
 void SetInfiniteLoop(IWICBitmapEncoder* encoder) {
@@ -173,6 +193,7 @@ void WindowsMedia::CreateGif(const fs::path& input, const fs::path& output, cons
     SetInfiniteLoop(encoder.Get());
     Check(encoder->SetPalette(palette.Get()),"GIFの共通パレットを設定できませんでした。");
     LONGLONG nextFrame=0; const LONGLONG interval=static_cast<LONGLONG>(10000000.0/attempt.fps); bool wrote=false;
+    std::vector<BYTE> previousPixels;
     for (;;) {
         DWORD streamIndex=0,flags=0; LONGLONG timestamp=0; ComPtr<IMFSample> sample;
         Check(reader->ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM,0,&streamIndex,&flags,&timestamp,&sample),"動画フレームを読み取れませんでした。");
@@ -183,11 +204,20 @@ void WindowsMedia::CreateGif(const fs::path& input, const fs::path& output, cons
         Check(scaler->Initialize(bitmap.Get(),attempt.width,attempt.height,WICBitmapInterpolationModeFant),"画像を縮小できませんでした。");
         ComPtr<IWICFormatConverter> indexed; Check(factory->CreateFormatConverter(&indexed),"GIF色変換を作成できませんでした。");
         Check(indexed->Initialize(scaler.Get(),GUID_WICPixelFormat8bppIndexed,WICBitmapDitherTypeNone,palette.Get(),0,WICBitmapPaletteTypeCustom),"GIFの色数を削減できませんでした。");
+        std::vector<BYTE> currentPixels(static_cast<size_t>(attempt.width)*attempt.height);
+        Check(indexed->CopyPixels(nullptr,attempt.width,static_cast<UINT>(currentPixels.size()),currentPixels.data()),"GIFフレームを比較できませんでした。");
+        WICRect changed=FindChangedRectangle(currentPixels,previousPixels,attempt.width,attempt.height);
+        ComPtr<IWICBitmap> indexedBitmap;
+        Check(factory->CreateBitmapFromMemory(attempt.width,attempt.height,GUID_WICPixelFormat8bppIndexed,attempt.width,
+            static_cast<UINT>(currentPixels.size()),currentPixels.data(),&indexedBitmap),"GIF差分画像を作成できませんでした。");
+        Check(indexedBitmap->SetPalette(palette.Get()),"GIF差分画像のパレットを設定できませんでした。");
+        ComPtr<IWICBitmapClipper> clipped; Check(factory->CreateBitmapClipper(&clipped),"GIF差分切り抜きを作成できませんでした。");
+        Check(clipped->Initialize(indexedBitmap.Get(),&changed),"GIF差分を切り抜けませんでした。");
         ComPtr<IWICBitmapFrameEncode> frame; ComPtr<IPropertyBag2> properties;
         Check(encoder->CreateNewFrame(&frame,&properties),"GIFフレームを作成できませんでした。"); Check(frame->Initialize(properties.Get()),"GIFフレームを初期化できませんでした。");
-        Check(frame->SetSize(attempt.width,attempt.height),"GIFサイズを設定できませんでした。"); WICPixelFormatGUID format=GUID_WICPixelFormat8bppIndexed; Check(frame->SetPixelFormat(&format),"GIFピクセル形式を設定できませんでした。");
-        SetDelay(frame.Get(),attempt.fps);
-        Check(frame->WriteSource(indexed.Get(),nullptr),"GIFフレームを書き込めませんでした。"); Check(frame->Commit(),"GIFフレームを保存できませんでした。"); wrote=true;
+        Check(frame->SetSize(changed.Width,changed.Height),"GIFサイズを設定できませんでした。"); WICPixelFormatGUID format=GUID_WICPixelFormat8bppIndexed; Check(frame->SetPixelFormat(&format),"GIFピクセル形式を設定できませんでした。");
+        SetFrameMetadata(frame.Get(),attempt.fps,changed);
+        Check(frame->WriteSource(clipped.Get(),nullptr),"GIFフレームを書き込めませんでした。"); Check(frame->Commit(),"GIFフレームを保存できませんでした。"); previousPixels=std::move(currentPixels); wrote=true;
     }
     if (!wrote) throw std::runtime_error("動画からフレームを取得できませんでした。");
     Check(encoder->Commit(),"GIFを保存できませんでした。"); Check(stream->Commit(STGC_DEFAULT),"GIFファイルを保存できませんでした。");
