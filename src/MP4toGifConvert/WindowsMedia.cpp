@@ -66,7 +66,10 @@ void SetFrameMetadata(IWICBitmapFrameEncode* frame, double fps, const WICRect& r
     PROPVARIANT value; PropVariantInit(&value); value.vt=VT_UI2; value.uiVal=static_cast<USHORT>(std::max(1.0, std::round(100.0/fps)));
     Check(metadata->SetMetadataByName(L"/grctlext/Delay", &value), "GIFフレーム間隔を設定できませんでした。");
     // Keep the previous frame so subsequent frames may contain only a changed rectangle.
-    value.uiVal=1; Check(metadata->SetMetadataByName(L"/grctlext/Disposal", &value), "GIFフレームの合成方法を設定できませんでした。");
+    value.vt=VT_UI1; value.bVal=1;
+    Check(metadata->SetMetadataByName(L"/grctlext/Disposal", &value), "GIFフレームの合成方法を設定できませんでした。");
+    // Image Descriptor coordinates use 16-bit unsigned values, unlike Disposal.
+    value.vt=VT_UI2;
     value.uiVal=static_cast<USHORT>(rectangle.X); Check(metadata->SetMetadataByName(L"/imgdesc/Left", &value), "GIFフレーム位置を設定できませんでした。");
     value.uiVal=static_cast<USHORT>(rectangle.Y); Check(metadata->SetMetadataByName(L"/imgdesc/Top", &value), "GIFフレーム位置を設定できませんでした。");
     value.uiVal=static_cast<USHORT>(rectangle.Width); Check(metadata->SetMetadataByName(L"/imgdesc/Width", &value), "GIFフレーム幅を設定できませんでした。");
