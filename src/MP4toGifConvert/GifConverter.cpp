@@ -9,7 +9,7 @@ namespace fs = std::filesystem;
 static int Even(int value) { return value % 2 == 0 ? value : value + 1; }
 
 std::vector<Attempt> GifConverter::BuildAttempts(const VideoInfo& video) {
-    constexpr int minWidth = 125, minHeight = 100;
+    constexpr int minWidth = 100, minHeight = 100;
     double minimumScale = std::max(static_cast<double>(minWidth) / video.width, static_cast<double>(minHeight) / video.height);
     std::vector<std::pair<int, int>> dimensions;
     for (double scale = 0.8; scale > minimumScale; scale *= 0.8)
@@ -29,7 +29,7 @@ ConversionResult GifConverter::Convert(const fs::path& input, const fs::path& ou
     const std::function<void(const std::wstring&)>& progress) const {
     VideoInfo video = media_.Probe(input);
     if (video.duration > 10) throw std::runtime_error("動画の長さは10秒以下にしてください。");
-    if (video.width < 125 || video.height < 100) throw std::runtime_error("動画は125×100px以上にしてください。");
+    if (video.width < 100 || video.height < 100) throw std::runtime_error("動画は100×100px以上にしてください。");
     fs::path temporary = fs::temp_directory_path() / (L"MP4toGifConvert-" + std::to_wstring(GetTickCount64()));
     fs::create_directories(temporary);
     struct Cleanup { fs::path path; ~Cleanup() { std::error_code ec; fs::remove_all(path, ec); } } cleanup{temporary};

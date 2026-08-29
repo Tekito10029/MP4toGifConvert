@@ -47,7 +47,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd,UINT message,WPARAM wParam,LPARAM lParam){
     case WM_CREATE:
         windowHandle=hwnd; Add(L"STATIC",L"入力 MP4",0,18,22,80,24); inputEdit=Add(L"EDIT",L"",WS_BORDER|ES_AUTOHSCROLL|ES_READONLY,100,18,475,26,InputEdit);Add(L"BUTTON",L"選択...",0,585,18,100,28,SelectInput);
         Add(L"STATIC",L"出力 GIF",0,18,62,80,24);outputEdit=Add(L"EDIT",L"",WS_BORDER|ES_AUTOHSCROLL|ES_READONLY,100,58,475,26,OutputEdit);Add(L"BUTTON",L"変更...",0,585,58,100,28,SelectOutput);
-        Add(L"STATIC",L"外部ソフト不要（Windows標準機能）　上限: 512 KB　最小: 125×100px",0,100,110,560,24);
+        Add(L"STATIC",L"外部ソフト不要（Windows標準機能）　上限: 512 KB　最小: 100×100px",0,100,110,560,24);
         progressBar=Add(PROGRESS_CLASSW,L"",PBS_MARQUEE,18,152,667,18,Progress);statusLabel=Add(L"STATIC",L"10秒以下のMP4ファイルを選択してください（最低秒数の制限はありません）。",0,18,184,550,40,StatusLabel);
         convertButton=Add(L"BUTTON",L"GIFに変換",BS_DEFPUSHBUTTON,565,218,120,32,ConvertButton);EnableWindow(convertButton,FALSE);return 0;
     case WM_COMMAND:
