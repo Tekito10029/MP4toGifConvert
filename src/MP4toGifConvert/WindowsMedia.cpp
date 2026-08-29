@@ -43,8 +43,8 @@ ComPtr<IMFSourceReader> OpenReader(const fs::path& input, UINT32& width, UINT32&
     Check(attributes->SetUINT32(MF_READWRITE_ENABLE_HARDWARE_TRANSFORMS, TRUE), "動画のハードウェアデコードを有効にできませんでした。");
     ComPtr<IMFSourceReader> reader;
     Check(MFCreateSourceReaderFromURL(input.c_str(), attributes.Get(), &reader), "MP4ファイルを開けませんでした。");
-    reader->SetStreamSelection(MF_SOURCE_READER_ALL_STREAMS, FALSE);
-    Check(reader->SetStreamSelection(MF_SOURCE_READER_FIRST_VIDEO_STREAM, TRUE), "MP4に映像ストリームがありません。");
+    Check(reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE), "動画ストリームを初期化できませんでした。");
+    Check(reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM), TRUE), "MP4に映像ストリームがありません。");
     ComPtr<IMFMediaType> type;
     Check(MFCreateMediaType(&type), "動画形式を作成できませんでした。");
     Check(type->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Video), "動画形式を設定できませんでした。");
@@ -142,7 +142,7 @@ ComPtr<IWICBitmap> CreateBitmapFromSample(IMFSample* sample, IWICImagingFactory*
 void SeekReader(IMFSourceReader* reader, double seconds) {
     PROPVARIANT position; PropVariantInit(&position); position.vt=VT_I8;
     position.hVal.QuadPart=static_cast<LONGLONG>(seconds*10000000.0);
-    Check(reader->SetCurrentPosition(GUID_NULL,&position), "動画の開始位置へ移動できませんでした。");
+    Check(reader->SetCurrentPosition(GUID_NULL,position), "動画の開始位置へ移動できませんでした。");
     PropVariantClear(&position);
 }
 
