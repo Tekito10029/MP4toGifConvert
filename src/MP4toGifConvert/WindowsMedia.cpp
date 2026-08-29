@@ -190,6 +190,30 @@ VideoInfo WindowsMedia::Probe(const fs::path& input) const {
     return {duration,static_cast<int>(width),static_cast<int>(height),fps};
 }
 
+PreviewImage WindowsMedia::CreatePreview(const fs::path& input, double seconds,
+    int outputWidth, int outputHeight, int maximumWidth, int maximumHeight) const {
+    Runtime runtime; UINT32 sourceWidth=0,sourceHeight=0; double sourceFps=0,duration=0;
+    ComPtr<IMFSourceReader> reader=OpenReader(input,sourceWidth,sourceHeight,sourceFps,duration);
+    if (seconds<0 || seconds>duration || outputWidth<1 || outputHeight<1) throw std::runtime_error("プレビュー設定が不正です。");
+    SeekReader(reader.Get(),seconds);
+    ComPtr<IMFSample> sample;
+    for (;;) {
+        DWORD streamIndex=0,flags=0; LONGLONG timestamp=0;
+        Check(reader->ReadSample(MF_SOURCE_READER_FIRST_VIDEO_STREAM,0,&streamIndex,&flags,&timestamp,&sample),"プレビューフレームを読み取れませんでした。");
+        if (flags&MF_SOURCE_READERF_ENDOFSTREAM) throw std::runtime_error("プレビューフレームがありません。");
+        if (sample) break;
+    }
+    ComPtr<IWICImagingFactory> factory; Check(CoCreateInstance(CLSID_WICImagingFactory,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&factory)),"プレビュー画像処理を作成できませんでした。");
+    ComPtr<IWICBitmap> bitmap=CreateBitmapFromSample(sample.Get(),factory.Get(),sourceWidth,sourceHeight);
+    double scale=std::min(static_cast<double>(maximumWidth)/outputWidth,static_cast<double>(maximumHeight)/outputHeight);
+    int width=std::max(1,static_cast<int>(outputWidth*scale)); int height=std::max(1,static_cast<int>(outputHeight*scale));
+    ComPtr<IWICBitmapScaler> scaler; Check(factory->CreateBitmapScaler(&scaler),"プレビュー縮小処理を作成できませんでした。");
+    Check(scaler->Initialize(bitmap.Get(),width,height,WICBitmapInterpolationModeFant),"プレビューを縮小できませんでした。");
+    PreviewImage preview{width,height,std::vector<unsigned char>(static_cast<size_t>(width)*height*4)};
+    Check(scaler->CopyPixels(nullptr,width*4,static_cast<UINT>(preview.pixels.size()),preview.pixels.data()),"プレビュー画像を取得できませんでした。");
+    return preview;
+}
+
 void WindowsMedia::CreateGif(const fs::path& input, const fs::path& output, const EditOptions& options) const {
     Runtime runtime; UINT32 sourceWidth=0,sourceHeight=0; double sourceFps=0,duration=0;
     ComPtr<IMFSourceReader> reader=OpenReader(input,sourceWidth,sourceHeight,sourceFps,duration);
