@@ -85,7 +85,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd,UINT message,WPARAM wParam,LPARAM lParam){
         Add(L"STATIC",L"サイズ",0,18,148,70,24);Add(L"STATIC",L"幅",0,90,148,30,24);widthEdit=Add(L"EDIT",L"320",WS_BORDER|ES_AUTOHSCROLL,120,144,70,26,WidthField);Add(L"STATIC",L"高さ",0,205,148,40,24);heightEdit=Add(L"EDIT",L"240",WS_BORDER|ES_AUTOHSCROLL,245,144,70,26,HeightField);
         Add(L"STATIC",L"画質",0,18,188,70,24);Add(L"STATIC",L"色数",0,90,188,40,24);colorsEdit=Add(L"EDIT",L"200",WS_BORDER|ES_AUTOHSCROLL,130,184,70,26,ColorsField);Add(L"STATIC",L"FPS",0,215,188,35,24);fpsEdit=Add(L"EDIT",L"15",WS_BORDER|ES_AUTOHSCROLL,250,184,65,26,FpsField);
         Add(L"STATIC",L"プレビュー（開始位置）",0,370,102,200,22);previewControl=Add(L"STATIC",L"MP4を選択してください",SS_BITMAP|SS_CENTERIMAGE|WS_BORDER,370,126,315,178,PreviewControl);
-        Add(L"STATIC",L"設定値で1回だけ書き出します（自動圧縮なし）",0,18,224,330,24);
+        Add(L"STATIC",L"動画長さの上限なし・設定値で1回だけ書き出し（自動圧縮なし）",0,18,224,340,24);
         progressBar=Add(PROGRESS_CLASSW,L"",PBS_MARQUEE,18,318,667,18,Progress);statusLabel=Add(L"STATIC",L"MP4を選択して編集内容を指定してください。",0,18,350,520,40,StatusLabel);
         convertButton=Add(L"BUTTON",L"GIFを書き出す",BS_DEFPUSHBUTTON,545,378,140,32,ConvertButton);EnableWindow(convertButton,FALSE);return 0;
     case WM_COMMAND:
